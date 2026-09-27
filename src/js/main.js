@@ -1,4 +1,4 @@
-// 叭叭車 Beep Cars — app shell: start screen, calibration, play loop, parent menu, bedtime.
+// 叭叭車 Beep Cars — app shell: start screen, play loop, parent menu, bedtime.
 
 import { clamp, makeRng } from './util.js';
 import { MotionDetector } from './motion.js';
@@ -53,7 +53,10 @@ const synthetic = params.has('synthetic');
 
 const audio = new AudioEngine();
 const media = new MediaInput(video);
-const detector = new MotionDetector({ width: SAMPLE_W, height: SAMPLE_H, sensitivity: settings.sensitivity });
+const detector = new MotionDetector({
+  width: SAMPLE_W, height: SAMPLE_H, sensitivity: settings.sensitivity,
+  settleSeconds: num('settleSeconds') ?? undefined,
+});
 const loud = new LoudnessDetector();
 const synthCam = synthetic ? new SyntheticCamera({ width: SAMPLE_W, height: SAMPLE_H }) : null;
 const session = new SessionTimer(num('sessionSeconds') ?? settings.minutes * 60);
@@ -97,7 +100,7 @@ const scenes = {
   gallery: new GalleryScene(game),
 };
 
-let state = 'start'; // start | calibrate | play | sleep
+let state = 'start'; // start | play | sleep
 let scene = scenes.road;
 let panelOpen = false;
 let fade = 0;
@@ -108,9 +111,8 @@ let clapQueue = 0;
 let synthMic = 0;
 let synthLastFrame = 0;
 let motionSetAt = null;
-let calib = null;
+let hintTimer = 0;
 const idleSeconds = num('idleSeconds') ?? 25;
-const calibSeconds = num('calibSeconds') ?? 3;
 const input = { energy: 0, steer: 0, moving: false, top: 0, left: 0, right: 0 };
 
 // ---- sizing -------------------------------------------------------------------------------
@@ -290,7 +292,7 @@ function armNavigationGuards() {
   }
 }
 addEventListener('popstate', () => {
-  if (state === 'play' || state === 'calibrate') armNavigationGuards();
+  if (state === 'play') armNavigationGuards();
 });
 addEventListener('beforeunload', (e) => {
   if (state === 'play') {
@@ -362,7 +364,7 @@ function wirePanel() {
       settings.mirror = !settings.mirror;
     } else if (b.id === 'recalibrate') {
       closePanel();
-      beginCalibration();
+      recalibrate();
     } else if (b.id === 'end') {
       closePanel();
       endSession();
@@ -379,8 +381,11 @@ function wirePanel() {
   });
 }
 
-// ---- flow: start → calibrate → play → sleep ----------------------------------------------
-async function start() {
+// ---- flow: start → play → sleep ------------------------------------------------------------
+// Start plays at once. The camera (and mic) attach whenever the browser hands them over; until
+// then, and if they never come, the keyboard, trackpad and mic still play. The motion detector
+// learns the room silently for its first ~1.2 s of frames instead of asking him to stand still.
+function start() {
   $('start').hidden = true;
   requestFull();
   audio.init();
@@ -391,57 +396,34 @@ async function start() {
     if (name.startsWith('honk:')) document.body.dataset.lastSound = name;
   };
   armNavigationGuards();
-  state = 'calibrate';
-  $('calib').hidden = false;
-  $('calib-msg').hidden = false;
-  $('calib-nocam').hidden = true;
-  document.body.classList.add('calibrating');
-  const st = await media.start(audio.ctx);
-  document.body.classList.toggle('live', st.video);
-  if (!st.video && !synthetic) {
-    $('calib-msg').hidden = true;
-    $('calib-nocam').hidden = false;
-    setTimeout(beginPlay, 2500);
-    return;
-  }
-  beginCalibration();
-}
-
-function beginCalibration() {
-  state = 'calibrate';
-  $('calib').hidden = false;
-  document.body.classList.add('calibrating');
   detector.reset();
-  detector.beginCalibration();
-  calib = { t: 0, restarts: 0 };
-  setRing(0);
+  detector.settle();
+  beginPlay();
+  media.start(audio.ctx).then((st) => {
+    if (state === 'sleep') return;
+    document.body.classList.toggle('live', st.video);
+    updatePanel();
+    if (!st.video && !synthetic) showHint('nocam', 5000);
+  });
 }
 
-function setRing(k) {
-  const c = $('calib-ring');
-  if (c) c.style.strokeDashoffset = String(Math.round(339 * (1 - k)));
-  const n = $('calib-count');
-  if (n) n.textContent = String(Math.max(1, Math.ceil(calibSeconds * (1 - k))));
+/** Parent asked to recalibrate: relearn the room silently while play carries on. */
+function recalibrate() {
+  detector.reset();
+  detector.settle();
+  showHint('recal', 1800);
 }
 
-function updateCalibration(dt, out) {
-  if (out.raw > 0.35 && calib.restarts < 3 && calib.t > 0.3) {
-    // He moved: start the count again (at most three times; then just accept — never a dead end).
-    calib.t = 0;
-    calib.restarts++;
-    detector.beginCalibration();
-  }
-  calib.t += dt;
-  setRing(calib.t / calibSeconds);
-  if (calib.t >= calibSeconds) {
-    detector.endCalibration();
-    beginPlay();
-  }
+/** A small, non-blocking note at the top of the screen (never covers play, never takes input). */
+function showHint(which, ms) {
+  const h = $('hint');
+  for (const el of h.querySelectorAll('[data-hint]')) el.hidden = el.dataset.hint !== which;
+  h.hidden = false;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => (h.hidden = true), ms);
 }
 
 function beginPlay() {
-  $('calib').hidden = true;
-  document.body.classList.remove('calibrating');
   const wasPlaying = session.elapsed > 0 && !session.done;
   state = 'play';
   lastActivity = game.t;
@@ -459,8 +441,8 @@ function endSession() {
   invite.state = 'hidden';
   media.stop(); // camera light goes off right away
   document.body.classList.remove('live');
-  $('calib').hidden = true;
-  document.body.classList.remove('calibrating');
+  clearTimeout(hintTimer);
+  $('hint').hidden = true;
   document.body.classList.add('asleep');
   setScene('sleep', { remember: false });
   const len = audio.lullaby();
@@ -495,7 +477,7 @@ function frame() {
 
   // 1. sense
   let out = null;
-  if (state === 'calibrate' || state === 'play') {
+  if (state === 'play') {
     let gray = null;
     if (synthCam) {
       if (now - synthLastFrame >= 1 / 30 - 0.002) {
@@ -515,7 +497,6 @@ function frame() {
   input.top = o.top;
   input.left = o.left;
   input.right = o.right;
-  if (state === 'calibrate' && out && calib) updateCalibration(dt, out);
 
   // 2. parent combo (both Shift keys, or a 2 s press in the top-left corner)
   if (combo.update(now)) openPanel();
@@ -607,7 +588,7 @@ window.__beep = {
   get scene() { return scene.name; },
   get panelOpen() { return panelOpen; },
   get input() { return { ...input }; },
-  get detector() { return { ...detector.out, sensitivity: detector.sensitivity }; },
+  get detector() { return { ...detector.out, sensitivity: detector.sensitivity, settling: detector.settling }; },
   get settings() { return { ...settings }; },
   get session() { return { duration: session.duration, elapsed: session.elapsed, done: session.done }; },
   get audio() { return { muted: audio.muted, gain: audio.effectiveGain, state: audio.ctx?.state ?? 'none', recoveries: audio.recoveries || 0, broken: !!audio.broken }; },

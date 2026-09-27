@@ -28,7 +28,7 @@ async function open(query = '', opts = {}) {
   page.close = async () => browser.close();
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && errors.push(query + ': ' + m.text()));
-  await page.goto(base + '?synthetic&calibSeconds=1' + query);
+  await page.goto(base + '?synthetic&settleSeconds=0.6' + query);
   return page;
 }
 async function shot(page, name) {
@@ -45,13 +45,13 @@ async function play(page) {
 }
 
 try {
-  // start + calibration
-  let page = await open('&calibSeconds=3');
+  // start, then playing at once
+  let page = await open('');
   await wait(page, 700);
   await shot(page, '01-start');
   await page.click('#go');
-  await wait(page, 1200);
-  await shot(page, '02-calibration');
+  await wait(page, 600);
+  await shot(page, '02-playing-at-once');
   await page.close();
 
   // road

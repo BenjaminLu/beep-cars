@@ -9,7 +9,9 @@
 //    the whole frame and differencing against that prediction instead of the raw previous frame.
 //  * Each cell keeps an adaptive noise baseline; a cell only counts when it is well above its own
 //    baseline AND at least one neighbour is also moving (kills isolated sensor sparkle).
-//  * Calibration (child standing still for ~3 s) seeds the baseline.
+//  * No calibration pose: after the camera starts (or the parent asks to recalibrate) the detector
+//    "settles" silently for ~1.2 s of camera frames. Baselines adapt fast (capped so a child who is
+//    already waving is not learned as noise) and nothing is reported, then it reacts normally.
 
 import { clamp, approach } from './util.js';
 
@@ -36,13 +38,16 @@ export class MotionDetector {
     this.adaptQuiet = opts.adaptQuiet ?? 0.6; // seconds: baseline time constant for quiet cells
     this.adaptBusy = opts.adaptBusy ?? 25; // seconds: slowly absorb a permanently busy cell (a TV)
     this.honkRefractory = opts.honkRefractory ?? 0.75; // seconds between arm-wave honks
+    this.settleSeconds = opts.settleSeconds ?? 1.2; // silent baseline-learning window
+    this.settleTau = opts.settleTau ?? 0.25; // seconds: baseline time constant while settling
+    this.settleCap = opts.settleCap ?? 7; // max baseline learned while settling (a wave is ~20–40)
     this.setSensitivity(opts.sensitivity ?? 'medium');
 
     this.prev = null;
     this.noise = new Float32Array(this.nCells).fill(2.5);
     this.cell = new Float32Array(this.nCells);
     this.active = new Float32Array(this.nCells);
-    this.calib = null;
+    this.settleLeft = 0;
     this.lastTime = null;
     this.lastHonk = -Infinity;
     this.frames = 0;
@@ -56,6 +61,7 @@ export class MotionDetector {
       moving: false,
       honk: false, // true on the frame an arm-wave honk fires
       activeCells: 0,
+      settling: false, // true while the baseline is still being learned (nothing is reported)
     };
   }
 
@@ -73,29 +79,19 @@ export class MotionDetector {
     this.out.steer = 0;
   }
 
-  /** Start collecting a noise baseline while the child stands still. */
-  beginCalibration() {
-    this.calib = { sum: new Float32Array(this.nCells), sumSq: new Float32Array(this.nCells), n: 0 };
+  /**
+   * Learn the room's noise silently: for the next `seconds` of camera frames every cell's baseline
+   * adapts quickly and no motion, steering or honk is reported. Never blocks the game.
+   */
+  settle(seconds = this.settleSeconds) {
+    this.settleLeft = seconds;
+    this.out.settling = seconds > 0;
+    this.out.energy = 0;
+    this.out.moving = false;
   }
 
-  /** Finish calibration; returns how noisy the room is (mean cell noise) for the parent UI. */
-  endCalibration() {
-    const c = this.calib;
-    this.calib = null;
-    if (!c || c.n < 3) return null;
-    let total = 0;
-    for (let i = 0; i < this.nCells; i++) {
-      const mean = c.sum[i] / c.n;
-      const variance = Math.max(0, c.sumSq[i] / c.n - mean * mean);
-      this.noise[i] = Math.max(1.2, mean + Math.sqrt(variance));
-      total += this.noise[i];
-    }
-    return total / this.nCells;
-  }
-
-  /** How much the calibration frames moved so far (0..1); calibration restarts if it is high. */
-  calibrationMotion() {
-    return this.out.raw;
+  get settling() {
+    return this.settleLeft > 0;
   }
 
   fit(prev, gray, n, maxRes, a0, b0) {
@@ -158,13 +154,22 @@ export class MotionDetector {
     for (let c = 0; c < this.nCells; c++) cell[c] /= perCell;
     prev.set(gray);
 
-    if (this.calib) {
+    if (this.settleLeft > 0) {
+      // Settling: learn every cell's baseline fast and report nothing.
+      this.settleLeft -= dt;
       for (let c = 0; c < this.nCells; c++) {
-        this.calib.sum[c] += cell[c];
-        this.calib.sumSq[c] += cell[c] * cell[c];
+        const target = Math.min(cell[c], this.settleCap);
+        this.noise[c] = Math.max(0.8, approach(this.noise[c], target, this.settleTau, dt));
       }
-      this.calib.n++;
+      out.raw = out.top = out.left = out.right = 0;
+      out.activeCells = 0;
+      out.energy = 0;
+      out.steer = 0;
+      out.moving = false;
+      out.settling = this.settleLeft > 0;
+      return out;
     }
+    out.settling = false;
 
     // Threshold against each cell's own baseline, then require a moving neighbour.
     const act = this.active;
@@ -218,7 +223,7 @@ export class MotionDetector {
     const steerTarget = lr > 0.15 ? (out.right - out.left) / (lr + 0.05) : 0;
     out.steer = approach(out.steer, steerTarget, lr > 0.15 ? 0.15 : 0.9, dt);
 
-    if (!this.calib && out.top >= 0.3 && now - this.lastHonk >= this.honkRefractory) {
+    if (out.top >= 0.3 && now - this.lastHonk >= this.honkRefractory) {
       out.honk = true;
       this.lastHonk = now;
     }

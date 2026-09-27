@@ -44,10 +44,10 @@ When the session ends (5 minutes by default) the sky slowly turns to night, the 
 
 ## 家長操作 · For the parent
 
-1. 按 **開始 Start**。Chrome 會先問攝影機、再問麥克風，請選「允許」。沒有麥克風也能玩；沒有攝影機也能用鍵盤玩。
-   Press **Start**. Chrome asks for the camera, then the microphone — choose Allow. It works without a mic; without a camera the keyboard still plays.
-2. 校正：請孩子（或你自己）站到 1–2 公尺外、**保持不動 3 秒**。他亂動也沒關係，最多重來三次就會直接開始。
-   Calibration: stand 1–2 m back and **stay still for 3 s**. If he can't, it retries at most three times and then just starts.
+1. 按 **開始 Start**，車車馬上出來。Chrome 會先問攝影機、再問麥克風，請選「允許」；還沒允許前可以先按鍵盤玩，允許後攝影機自動接上。沒有麥克風也能玩；沒有攝影機也能用鍵盤玩。
+   Press **Start** and the cars are there at once. Chrome asks for the camera, then the microphone — choose Allow; the keyboard plays in the meantime and the camera joins in when it arrives. It works without a mic; without a camera the keyboard still plays.
+2. 不用站著不動校正：攝影機接上後的前 1 秒多，遊戲會在背景默默學房間的雜訊（這段時間動作不會觸發），之後就正常反應。
+   No stand-still calibration: for the first second or so after the camera starts, the game quietly learns the room's noise in the background (motion does not trigger yet), then it reacts normally.
 3. 開始玩。右下角的小鏡子讓他看到自己在動，外框會隨動作發亮。
    Play. The small mirror in the corner lets him see himself; its border glows when he moves.
 
@@ -56,8 +56,8 @@ When the session ends (5 minutes by default) the sky slowly turns to night, the 
 **同時按住左右兩個 Shift 鍵 2 秒**（或用觸控板按住畫面左上角 2 秒）。孩子亂敲鍵盤幾乎不可能剛好只按住這兩個鍵這麼久。
 **Hold both Shift keys for 2 seconds** (or press and hold the top-left corner with the trackpad). A toddler mashing the keyboard almost never holds exactly those two keys that long.
 
-選單裡可以：換場景、調靈敏度（低/中/高）、音量、靜音、顯示/隱藏小鏡子、每次玩多久（3/5/10/15 分鐘）、重新校正、結束（車車去睡覺）。選單打開時時間暫停。按 Esc 或「繼續玩」關閉。設定只記在這台電腦的瀏覽器裡。
-In the menu: switch scene, sensitivity (low/medium/high), volume, mute, show/hide the mirror, session length (3/5/10/15 min), recalibrate, end the session. The session clock pauses while the menu is open. Esc or Resume closes it. Settings are remembered in this browser only.
+選單裡可以：換場景、調靈敏度（低/中/高）、音量、靜音、顯示/隱藏小鏡子、每次玩多久（3/5/10/15 分鐘）、重新校正（在背景默默重學一秒多，不會擋住遊戲）、結束（車車去睡覺）。選單打開時時間暫停。按 Esc 或「繼續玩」關閉。設定只記在這台電腦的瀏覽器裡。
+In the menu: switch scene, sensitivity (low/medium/high), volume, mute, show/hide the mirror, session length (3/5/10/15 min), recalibrate (relearns the room silently for about a second; play carries on), end the session. The session clock pauses while the menu is open. Esc or Resume closes it. Settings are remembered in this browser only.
 
 ---
 
@@ -121,8 +121,8 @@ The page requests full screen, locks the keyboard while in full screen (Keyboard
   **Cause and effect must be immediate.** At 18 months he is learning "I did that!". Beyond ~100 ms the link breaks, so detection runs on every camera frame and the honk/hop happens in the same frame.
 - **大動作，不是精細動作。** 他還沒有精細的手指控制，也不會讀字。只用「整體動多少」「上面動」「左邊/右邊動」這種粗略的訊號，而且非常寬容。
   **Gross motor, not fine motor.** No fine finger control yet and no reading. Only coarse signals — how much, up high, left or right — and all of them forgiving.
-- **沒有失敗。** 沒有分數、倒數或「錯了」。紅綠燈不需要抓時機；車庫門他停下來也只會慢慢往下一點點；校正就算他一直動也會開始。
-  **No failure states.** No score, countdown or "wrong". The traffic light needs no timing; a garage door only sinks slowly when he pauses; calibration starts even if he never stands still.
+- **沒有失敗。** 沒有分數、倒數或「錯了」。紅綠燈不需要抓時機；車庫門他停下來也只會慢慢往下一點點；一開始也不用他站著不動，按下開始就能玩。
+  **No failure states.** No score, countdown or "wrong". The traffic light needs no timing; a garage door only sinks slowly when he pauses; he never has to stand still to start — play begins the moment Start is pressed.
 - **躲貓貓和物體恆存。** 這個年紀正著迷於「東西藏起來還在不在」。車庫門慢慢捲起、先看到輪子、再「叭！」跳出來，就是在玩這個。
   **Peekaboo and object permanence.** Hidden-then-revealed is endlessly delightful at this age: the door rolls up, the wheels peek out, then "beep!".
 - **重複又有一點點變化。** 同一個動作永遠得到同一種回應，但每次出來的車不一樣（十台車輪流，不會連續兩次一樣）。
@@ -145,7 +145,7 @@ The American Academy of Pediatrics suggests avoiding screens other than video ch
 src/
   index.html, styles.css
   js/
-    main.js        app shell: start → calibrate → play → sleep, parent menu, keyboard guard
+    main.js        app shell: start → play → sleep, parent menu, keyboard guard
     motion.js      frame-differencing motion detector (pure)
     synth.js       deterministic synthetic camera for tests (pure)
     loudness.js    clap/shout detector that ignores the game's own sounds (pure)
@@ -160,8 +160,8 @@ scripts/serve.mjs  tiny localhost server (no dependencies)
 scripts/proofs.mjs screenshots of every scene and car → proofs/
 ```
 
-**動作偵測 · Motion detection.** 每一格新的攝影機畫面鏡像後縮成 64×48 灰階，切成 16×12 格。先用整張畫面做穩健的線性擬合（cur ≈ a·prev + b）抵銷燈光閃爍和自動曝光，再算每一格的殘差；每格有自己會自動調整的雜訊基準（校正時先學好），而且要有相鄰格一起動才算數，單一雜訊點不會觸發。整體 → 速度，上面三分之一 → 喇叭，左右 → 方向。沒有機器學習模型，也不下載任何東西。
-Each new camera frame is mirrored, shrunk to 64×48 grayscale and split into a 16×12 grid. A robust whole-frame fit (cur ≈ a·prev + b) cancels flicker and auto-exposure; each cell has its own adaptive noise baseline (seeded by calibration) and only counts when a neighbour moves too. Whole frame → speed, top third → honk, left/right → steering. No ML models, no downloads.
+**動作偵測 · Motion detection.** 每一格新的攝影機畫面鏡像後縮成 64×48 灰階，切成 16×12 格。先用整張畫面做穩健的線性擬合（cur ≈ a·prev + b）抵銷燈光閃爍和自動曝光，再算每一格的殘差；每格有自己會自動調整的雜訊基準（攝影機接上後的前約 1.2 秒默默快速學好，這段時間不觸發），而且要有相鄰格一起動才算數，單一雜訊點不會觸發。整體 → 速度，上面三分之一 → 喇叭，左右 → 方向。沒有機器學習模型，也不下載任何東西。
+Each new camera frame is mirrored, shrunk to 64×48 grayscale and split into a 16×12 grid. A robust whole-frame fit (cur ≈ a·prev + b) cancels flicker and auto-exposure; each cell has its own adaptive noise baseline (learned silently and fast during the first ~1.2 s of camera frames, when nothing triggers) and only counts when a neighbour moves too. Whole frame → speed, top third → honk, left/right → steering. No ML models, no downloads.
 
 ```sh
 npm test            # unit tests (node --test) + browser tests (Playwright, Chromium)
@@ -173,7 +173,7 @@ npm run proofs      # screenshots → proofs/
 瀏覽器測試用 Chromium 的假攝影機/麥克風（`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`），並用 `?synthetic` 換成可重現的合成動作來源，所以結果是確定的。
 Browser tests run Chromium with a fake camera/mic and, via `?synthetic`, a deterministic synthetic motion source.
 
-測試用網址參數 · Test URL parameters: `?synthetic` · `sessionSeconds=N` · `calibSeconds=N` · `idleSeconds=N` · `scene=road|garage|wash|light|gallery`.
+測試用網址參數 · Test URL parameters: `?synthetic` · `sessionSeconds=N` · `settleSeconds=N` · `idleSeconds=N` · `scene=road|garage|wash|light|gallery`.
 
 CI：`.github/workflows/ci.yml` 只有一個叫 `ci` 的 job（安裝、裝 Chromium、建置、跑全部測試），可以直接設成必要檢查。
 CI: `.github/workflows/ci.yml` has a single job named `ci` (install, Chromium, build, all tests), ready to be a required check.

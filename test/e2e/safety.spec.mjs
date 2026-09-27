@@ -144,6 +144,8 @@ test('session ends gently: cars go to sleep and the camera really stops', async 
   await expect(page.locator('#sleep-card')).toContainText('車車回家睡覺囉');
   await expect(page.locator('#sleep-card')).toContainText('going home to sleep');
   expect(await beep(page, () => __beep.scene)).toBe('sleep');
+  // the camera may still have been arriving when the session ended: it is stopped the moment it does
+  await page.waitForFunction(() => __beep.tracks().length > 0, null, { timeout: 5000 });
   const tracks = await beep(page, () => __beep.tracks());
   expect(tracks.length).toBeGreaterThan(0);
   expect(tracks.every((t) => t.readyState === 'ended')).toBe(true);
