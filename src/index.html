@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<!--CSP-->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="color-scheme" content="light">
+<title>叭叭車 Beep Cars</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='24' width='52' height='22' rx='10' fill='%23ff5d5d'/%3E%3Crect x='16' y='12' width='30' height='18' rx='8' fill='%23ff5d5d'/%3E%3Ccircle cx='18' cy='48' r='8' fill='%23353a4c'/%3E%3Ccircle cx='46' cy='48' r='8' fill='%23353a4c'/%3E%3Ccircle cx='52' cy='32' r='5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="stage" tabindex="-1" aria-label="叭叭車 Beep Cars"></canvas>
+
+<div id="mirror" class="mirror" aria-hidden="true"><video id="mirror-video" playsinline muted></video></div>
+<div id="hold" class="hold" aria-hidden="true"></div>
+
+<section id="start" class="overlay">
+  <div class="card start-card">
+    <h1>叭叭車 <span>Beep Cars</span></h1>
+    <p class="lead">揮揮手、跳一跳、拍拍手，車車就會動！<br><span class="en">Wave, jump and clap to make the cars go!</span></p>
+    <ul class="howto">
+      <li><b>給家長</b> 孩子不用碰螢幕也不用碰鍵盤：他站在筆電前 1–2 公尺，用大動作玩。請陪他一起玩。<br><span class="en">For parents: your child never touches the screen. He stands 1–2 m back and plays with big movements. Please play along with him.</span></li>
+      <li><b>權限</b> 按「開始」後，瀏覽器會詢問攝影機和麥克風，請選「允許」。<br><span class="en">Permissions: after Start, Chrome asks for the camera and microphone — choose Allow.</span></li>
+      <li><b>隱私</b> 影像和聲音只在這台電腦的記憶體裡即時處理，不錄影、不儲存、不上傳；這個頁面完全不連網路。<br><span class="en">Privacy: video and sound are processed in memory on this computer only — never recorded, stored or sent. This page makes no network requests.</span></li>
+    </ul>
+    <button id="go" class="big">開始 <span>Start</span></button>
+    <p class="small">家長選單：同時按住左右兩個 Shift 2 秒 · Parent menu: hold both Shift keys for 2 s</p>
+  </div>
+</section>
+
+<section id="calib" class="overlay calib" hidden>
+  <div class="calib-box">
+    <div id="calib-msg">
+      <p class="calib-title">請站到 1–2 公尺外，保持不動 3 秒</p>
+      <p class="en">Stand back 1–2 m and stay still for 3 seconds</p>
+      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="54" class="ring-bg"/>
+        <circle id="calib-ring" cx="60" cy="60" r="54" class="ring-fg"/>
+        <text id="calib-count" x="60" y="62" text-anchor="middle" dominant-baseline="middle">3</text>
+      </svg>
+    </div>
+    <div id="calib-nocam" hidden>
+      <p class="calib-title">找不到攝影機 — 還是可以按鍵盤玩</p>
+      <p class="en">No camera — the keyboard still works</p>
+    </div>
+  </div>
+</section>
+
+<section id="panel" class="overlay panel-wrap" hidden role="dialog" aria-modal="true" aria-label="家長控制 Parent controls">
+  <div class="card panel">
+    <h2>家長控制 <span>Parent controls</span></h2>
+    <div class="group">
+      <h3>場景 Scene</h3>
+      <div class="seg">
+        <button data-scene="road">🛣️ 馬路<small>Road</small></button>
+        <button data-scene="garage">🏠 車庫躲貓貓<small>Garage peekaboo</small></button>
+        <button data-scene="wash">🫧 洗車<small>Car wash</small></button>
+        <button data-scene="light">🚦 紅綠燈<small>Traffic light</small></button>
+      </div>
+    </div>
+    <div class="group">
+      <h3>靈敏度 Sensitivity</h3>
+      <div class="seg">
+        <button data-sens="low">低<small>Low</small></button>
+        <button data-sens="medium">中<small>Medium</small></button>
+        <button data-sens="high">高<small>High</small></button>
+      </div>
+    </div>
+    <div class="group row">
+      <label class="vol">音量 Volume <input id="volume" type="range" min="0" max="100" step="5"></label>
+      <button id="mute" class="toggle">🔇 靜音 <small>Mute</small></button>
+      <button id="mirror-toggle" class="toggle">🪞 小鏡子 <small>Mirror preview</small></button>
+    </div>
+    <div class="group">
+      <h3>每次玩多久 Session length <span class="remain">剩下 Left: <b id="remain">5:00</b></span></h3>
+      <div class="seg">
+        <button data-min="3">3<small>min</small></button>
+        <button data-min="5">5<small>min</small></button>
+        <button data-min="10">10<small>min</small></button>
+        <button data-min="15">15<small>min</small></button>
+      </div>
+    </div>
+    <div class="group row actions">
+      <button id="recalibrate">重新校正 <small>Recalibrate</small></button>
+      <button id="end">🌙 結束，車車去睡覺 <small>End session</small></button>
+      <button id="resume" class="primary">繼續玩 <small>Resume</small></button>
+    </div>
+    <p class="small" id="devices"></p>
+    <p class="small">打開這個選單：同時按住左右 Shift 2 秒，或按住畫面左上角 2 秒 · Open: hold both Shift keys (or the top-left corner) for 2 s. Esc closes.</p>
+  </div>
+</section>
+
+<section id="sleep-card" class="overlay sleep" hidden>
+  <div class="sleep-text">
+    <p class="sleep-title">車車回家睡覺囉</p>
+    <p class="en">The cars are going home to sleep. Good night!</p>
+    <p class="small">攝影機和麥克風已關閉 · Camera and microphone are off</p>
+    <button id="again" class="big" hidden>再玩一次 <span>Play again</span></button>
+  </div>
+</section>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
