@@ -1,29 +1,110 @@
-import { test, expect, play, motion, sceneState, stats, beep } from './fixtures.mjs';
+import { test, expect, play, motion, sceneState, stats, beep, holdBothShifts } from './fixtures.mjs';
 
-test('parent start screen → camera → calibration → play', async ({ page }) => {
-  await page.goto('/?synthetic&calibSeconds=1');
+test('parent start screen → Start → playing at once, camera live', async ({ page }) => {
+  await page.goto('/?synthetic');
   await expect(page.locator('#start')).toBeVisible();
   await expect(page.locator('#start')).toContainText('開始');
   await expect(page.locator('#start')).toContainText('Start');
   await expect(page.locator('#start')).toContainText('不上傳'); // privacy line, zh
   await expect(page.locator('#start')).toContainText('never recorded'); // privacy line, en
+  await expect(page.locator('#start')).not.toContainText('3 秒');
   await page.click('#go');
-  await expect(page.locator('#calib')).toBeVisible();
-  await expect(page.locator('#calib')).toContainText('保持不動 3 秒');
-  await expect(page.locator('#calib')).toContainText('stay still for 3 seconds');
   await page.waitForFunction(() => __beep.state === 'play');
-  await expect(page.locator('#calib')).toBeHidden();
+  await expect(page.locator('#calib')).toHaveCount(0); // no calibration overlay any more
+  await expect(page.locator('.overlay:visible')).toHaveCount(0); // nothing covers the game
+  await page.waitForFunction(() => __beep.tracks().some((t) => t.kind === 'video'));
   const tracks = await beep(page, () => __beep.tracks());
   expect(tracks.find((t) => t.kind === 'video')?.readyState).toBe('live');
   await expect(page.locator('#mirror')).toBeVisible(); // the little mirror preview
   expect(await beep(page, () => __beep.audio.state)).toBe('running');
 });
 
-test('calibration restarts when he moves, but never gets stuck', async ({ page }) => {
-  await page.goto('/?synthetic&calibSeconds=0.8');
+test('Start → first car on screen and the scene playing in under 1 s', async ({ page }) => {
+  await page.goto('/?synthetic');
+  await page.waitForTimeout(300);
+  const t0 = await page.evaluate(() => {
+    window.__t0 = performance.now();
+    return window.__t0;
+  });
   await page.click('#go');
-  await motion(page, 'all'); // a toddler will not stand still
-  await page.waitForFunction(() => __beep.state === 'play', null, { timeout: 12_000 });
+  const t1 = await page.waitForFunction(() => {
+    const b = window.__beep;
+    const s = b.sceneState();
+    const { vw } = b.view;
+    return b.state === 'play' && b.session.elapsed > 0 && s.carX > 0 && s.carX < vw ? performance.now() : false;
+  }, null, { timeout: 3000, polling: 'raf' });
+  const ms = (await t1.jsonValue()) - t0;
+  expect(ms).toBeLessThan(1000);
+});
+
+test('moving during the first settle window never honks; once settled, motion works', async ({ page }) => {
+  await page.goto('/?synthetic');
+  await motion(page, 'top'); // a toddler will not stand still: he is waving from the start
+  await page.click('#go');
+  await page.waitForFunction(() => __beep.state === 'play');
+  await page.waitForFunction(() => __beep.detector.settling); // camera frames are being learned
+  await page.waitForTimeout(700);
+  let s = await stats(page);
+  expect(s.waveHonks).toBe(0);
+  expect((await beep(page, () => __beep.input)).moving).toBe(false);
+  // after ~1.2 s he is heard, even though he never stood still
+  await page.waitForFunction(() => __beep.stats.waveHonks > 0, null, { timeout: 2500 });
+  expect(await beep(page, () => __beep.detector.settling)).toBe(false);
+  s = await stats(page);
+  expect(s.waveHonks).toBeGreaterThan(0);
+  // and the reaction is still fast once settled
+  await motion(page, 'none');
+  await page.waitForTimeout(1500);
+  await motion(page, 'all');
+  await page.waitForFunction(() => __beep.stats.latency.moving != null, null, { timeout: 2000 });
+  expect((await stats(page)).latency.moving).toBeLessThan(120);
+});
+
+test('lighting flicker right from Start never honks or drives', async ({ page }) => {
+  await page.goto('/?synthetic');
+  await motion(page, 'flicker');
+  await page.click('#go');
+  await page.waitForFunction(() => __beep.state === 'play');
+  await page.waitForTimeout(3500);
+  const s = await stats(page);
+  expect(s.waveHonks).toBe(0);
+  expect((await sceneState(page)).speed).toBeLessThan(20);
+});
+
+test('recalibrate from the parent menu is silent and never blocks play', async ({ page }) => {
+  await play(page);
+  await holdBothShifts(page);
+  await expect(page.locator('#panel')).toBeVisible();
+  await page.click('#recalibrate');
+  await expect(page.locator('#panel')).toBeHidden();
+  expect(await beep(page, () => __beep.state)).toBe('play');
+  expect(await beep(page, () => __beep.detector.settling)).toBe(true);
+  await expect(page.locator('#hint')).toBeVisible(); // a small note, not an overlay
+  await expect(page.locator('#hint')).toContainText('Recalibrating');
+  await expect(page.locator('.overlay:visible')).toHaveCount(0);
+  const k = (await stats(page)).keyHonks;
+  await page.keyboard.press('a'); // the keyboard still plays while it relearns
+  await page.waitForFunction((n) => __beep.stats.keyHonks > n, k, { timeout: 1000 });
+  await page.waitForFunction(() => !__beep.detector.settling, null, { timeout: 3000 });
+  await motion(page, 'all');
+  await page.waitForFunction(() => __beep.input.moving, null, { timeout: 1000 });
+  await expect(page.locator('#hint')).toBeHidden({ timeout: 3000 });
+});
+
+test('camera permission still pending: plays with the keyboard, camera joins when it arrives', async ({ page }) => {
+  await page.addInitScript(() => {
+    const md = navigator.mediaDevices;
+    const real = md.getUserMedia.bind(md);
+    md.getUserMedia = (c) => (c.video ? new Promise((r) => setTimeout(r, 2000)).then(() => real(c)) : real(c));
+  });
+  await page.goto('/');
+  await page.click('#go');
+  await page.waitForFunction(() => __beep.state === 'play', null, { timeout: 1000 });
+  expect(await beep(page, () => __beep.videoAttached())).toBe(false);
+  await page.keyboard.press('a');
+  await page.waitForFunction(() => __beep.stats.keyHonks > 0, null, { timeout: 1000 });
+  await page.waitForFunction(() => __beep.videoAttached() && __beep.stats.camFrames > 5, null, { timeout: 6000 });
+  await expect(page.locator('#mirror')).toBeVisible();
 });
 
 test('standing still: the car idles, nothing honks', async ({ page }) => {
@@ -109,9 +190,10 @@ test('idle for a while → a car peeks in and asks "beep?"; moving answers it', 
 });
 
 test('the real (fake-device) camera path feeds the detector', async ({ page }) => {
-  await page.goto('/?calibSeconds=0.5');
+  await page.goto('/');
   await page.click('#go');
-  await page.waitForFunction(() => __beep.state === 'play', null, { timeout: 10_000 });
+  // play starts at once; the camera joins as soon as the browser hands it over
+  await page.waitForFunction(() => __beep.state === 'play' && __beep.stats.camFrames > 0, null, { timeout: 10_000 });
   const a = (await stats(page)).camFrames;
   await page.waitForTimeout(1000);
   const b = (await stats(page)).camFrames;
@@ -124,17 +206,18 @@ test('no camera at all: the keyboard still plays', async ({ page }) => {
   });
   await page.goto('/');
   await page.click('#go');
-  await expect(page.locator('#calib-nocam')).toBeVisible();
-  await page.waitForFunction(() => __beep.state === 'play', null, { timeout: 6000 });
-  await expect(page.locator('#mirror')).toBeHidden();
+  await page.waitForFunction(() => __beep.state === 'play', null, { timeout: 1000 }); // at once
   await page.keyboard.press('a');
-  await page.waitForFunction(() => __beep.stats.keyHonks > 0);
+  await page.waitForFunction(() => __beep.stats.keyHonks > 0, null, { timeout: 1000 });
+  await expect(page.locator('#hint')).toContainText('No camera'); // a small note, never blocking
+  await expect(page.locator('.overlay:visible')).toHaveCount(0);
+  await expect(page.locator('#mirror')).toBeHidden();
 });
 
 test('reduced motion is respected', async ({ browser }) => {
   const ctx = await browser.newContext({ reducedMotion: 'reduce' });
   const page = await ctx.newPage();
-  await page.goto('/?synthetic&calibSeconds=0.5');
+  await page.goto('/?synthetic');
   expect(await beep(page, () => __beep.reduced)).toBe(true);
   const fx = await beep(page, () => __beep.fx);
   expect(fx.max).toBeLessThan(200);

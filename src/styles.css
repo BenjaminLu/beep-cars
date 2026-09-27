@@ -61,15 +61,6 @@ html, body {
 body:not(.live) .mirror,
 body.no-mirror .mirror { display: none; }
 body.asleep .mirror { display: none; }
-body.calibrating.live .mirror {
-  display: block;
-  width: min(56vw, 640px);
-  right: 50%;
-  bottom: 50%;
-  transform: translate(50%, 58%);
-  opacity: 1;
-  z-index: 5;
-}
 
 .hold {
   position: fixed;
@@ -140,15 +131,12 @@ button.big span { font-size: 0.6em; margin-left: 6px; }
 button.big:active { transform: translateY(6px); box-shadow: 0 2px 0 var(--ink); }
 button:focus-visible { outline: 4px solid var(--accent-2); outline-offset: 3px; }
 
-/* ---- calibration ---- */
-.calib { background: rgba(214, 240, 255, 0.55); align-items: start; }
-.calib-box { text-align: center; margin-top: 3vh; }
-.calib-title { font-size: clamp(26px, 3.4vw, 40px); font-weight: 800; margin: 0; }
-.calib .en { font-size: 22px; margin: 4px 0 8px; }
-.ring { position: fixed; right: 5vw; top: 42vh; width: 150px; height: 150px; }
-.ring-bg { fill: #fffdf6; stroke: #d7e3f3; stroke-width: 10; }
-.ring-fg { fill: none; stroke: #2fb34a; stroke-width: 10; stroke-linecap: round; stroke-dasharray: 339; stroke-dashoffset: 339; transform: rotate(-90deg); transform-origin: 60px 60px; transition: stroke-dashoffset 100ms linear; }
-.ring text { font-size: 46px; font-weight: 800; fill: var(--ink); }
+/* ---- small non-blocking hint (recalibrate, no camera) ---- */
+.hint { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 4; pointer-events: none;
+  background: rgba(255, 253, 246, 0.92); border-radius: 999px; padding: 8px 18px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 18px; font-weight: 700; max-width: calc(100vw - 32px); text-align: center; }
+.hint p { margin: 0; }
+.hint .en { font-weight: 500; color: var(--muted); font-size: 15px; }
 
 /* ---- parent panel ---- */
 .panel-wrap { background: rgba(38, 48, 74, 0.35); }

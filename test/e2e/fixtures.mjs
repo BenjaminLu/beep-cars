@@ -34,11 +34,14 @@ export const test = base.extend({
 });
 export { expect };
 
-/** Open the game with the synthetic camera, press Start like a parent, wait until playing. */
+/**
+ * Open the game with the synthetic camera, press Start like a parent, wait until playing and the
+ * motion detector has finished its silent ~1.2 s settle window (so motion counts from here on).
+ */
 export async function play(page, query = '') {
-  await page.goto(`/?synthetic&calibSeconds=0.6${query}`);
+  await page.goto(`/?synthetic${query}`);
   await page.click('#go');
-  await page.waitForFunction(() => window.__beep.state === 'play', null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__beep.state === 'play' && !window.__beep.detector.settling, null, { timeout: 10_000 });
 }
 
 export const beep = (page, fn, arg) => page.evaluate(fn, arg);
